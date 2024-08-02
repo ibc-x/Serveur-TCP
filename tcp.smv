@@ -1,0 +1,47 @@
+MODULE main
+VAR
+    temps: 0 .. 75;
+    memoire: 0 .. 5;
+    nb_connexion: 0 .. 5;
+    message: {SYN, SYN_ACK, CONN, DECONN, ACK};
+    etat: {reception, reponse, connexion, fin_connexion, bloquer};
+ASSIGN
+    init(temps):=75;
+    init(memoire):=0;
+    init(message):=SYN; 
+    init(nb_connexion):=1;
+    init(etat):=reception;
+
+    next(etat):= case
+                (etat = reception ) & (message = SYN) : reponse;
+                ((message = ACK) & (temps < 1)) | (nb_connexion < 5) : connexion;
+                (etat = connexion ) & (message = DECONN) : fin_connexion;
+                (memoire = 5) : bloquer;
+                (etat = bloquer) & (memoire < 5) : connexion;
+                TRUE: etat;
+                esac;
+
+    next(memoire):= case
+        (message = SYN) & (memoire < 5) : memoire + 1;
+        (message = ACK) & (memoire > 0) : memoire - 1;
+        TRUE: memoire;
+        esac;
+
+    next(message):= case
+        (etat = reponse) & (temps < 2) : SYN_ACK;
+        TRUE: message;
+        esac;
+
+    next(temps):= case
+        ((message = SYN) & (temps > 2)) |  ((nb_connexion = 5) & (temps > 0)): temps - 1;
+        TRUE: temps;
+        esac;
+        
+LTLSPEC G (message = CONN -> etat = connexion);
+LTLSPEC G (message = SYN -> etat = reponse);
+
+CTLSPEC AG EF message = CONN;
+CTLSPEC AG (message = DECONN & temps > 0 -> EF etat = fin_connexion);
+CTLSPEC AG (etat = connexion -> AF etat = bloquer);
+CTLSPEC AG (etat = bloquer -> AF (etat = bloquer & nb_connexion = 5));
+CTLSPEC AG (etat = reception -> EF message = SYN);
