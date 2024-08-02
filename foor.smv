@@ -1,0 +1,42 @@
+MODULE main
+VAR
+    temps: 0 .. 120;
+    duree: 0 .. 120;
+    porte: {ouverte, fermee};
+    etat: {cuisson, fin_de_cycle, arret};
+ASSIGN
+    init(temps):=0;
+    init(duree):=0;
+    init(porte):=ouverte; 
+    init(etat):=arret;
+    next(porte):= case
+                (etat = arret | etat = fin_de_cycle) & (porte = fermee ) : {fermee, ouverte};
+                TRUE: porte;
+                esac;
+    next(duree):= case
+        (porte = fermee) & (temps = 0) & (etat = cuisson) : 2;
+        (etat = fin_de_cycle) & (duree > 0) : duree - 1;
+        TRUE: duree;
+        esac;
+    next(etat):= case
+        (porte = ouverte) | (etat = fin_de_cycle) & (duree = 0): arret;
+        (porte = fermee) & (temps > 0 ): cuisson;
+        (etat = cuisson) & (temps = 0) : fin_de_cycle;
+        TRUE: etat;
+        esac;
+    next(temps):= case
+        (etat = cuisson) & (temps > 0) : temps - 1;
+        TRUE: temps;
+        esac;
+        
+LTLSPEC G (porte = ouverte -> etat = arret);
+LTLSPEC G (porte = fermee & temps > 0 -> etat = cuisson);
+LTLSPEC G (porte = fermee & temps = 0 -> etat = fin_de_cycle);
+LTLSPEC G (etat = cuisson & temps = 0 -> X etat = fin_de_cycle);
+LTLSPEC G (etat = fin_de_cycle & duree = 0 -> X (X porte = ouverte));
+
+CTLSPEC AG EF porte = ouverte;
+CTLSPEC AG (porte = fermee & temps > 0 -> EF etat = cuisson);
+CTLSPEC AG (etat = cuisson -> AF etat = fin_de_cycle);
+CTLSPEC AG (etat = fin_de_cycle -> AF (etat = arret & porte = ouverte));
+CTLSPEC AG (porte = ouverte -> EF porte = fermee);
