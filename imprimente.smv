@@ -1,0 +1,63 @@
+MODULE main
+VAR
+    etat : {eteint, prechauffage, attente, traitement};
+    job_en_memoire : boolean; -- indique si un job est en mémoire
+    temps_prechauffage : 0 .. 2; -- compteur pour le préchauffage
+    temps_attente : 0 .. 120; -- compteur pour l'attente
+    duree_job : 0 .. 120; -- durée actuelle de traitement du job
+    job_recu : boolean; -- indique si un job a été reçu
+
+ASSIGN
+    init(etat) := eteint;
+    init(job_en_memoire) := FALSE;
+    init(temps_prechauffage) := 0;
+    init(temps_attente) := 0;
+    init(duree_job) := 0;
+    init(job_recu) := FALSE;
+
+    next(etat) :=
+        case
+            etat = eteint & job_recu : prechauffage;
+            etat = prechauffage & temps_prechauffage < 2 : prechauffage;
+            etat = prechauffage & temps_prechauffage = 2 & job_en_memoire : traitement;
+            etat = prechauffage & temps_prechauffage = 2 & !job_en_memoire : attente;
+            etat = attente & temps_attente < 120 & !job_recu : attente;
+            etat = attente & temps_attente = 120 & !job_recu : eteint;
+            etat = attente & job_recu : traitement;
+            etat = traitement & duree_job > 0 : traitement;
+            etat = traitement & duree_job = 0 : attente;
+            TRUE : etat;
+        esac;
+
+    next(job_en_memoire) :=
+        case
+            etat = traitement & duree_job = 0 : FALSE;
+            job_recu : TRUE;
+            TRUE : job_en_memoire;
+        esac;
+
+    next(temps_prechauffage) :=
+        case
+            etat = prechauffage & temps_prechauffage < 2 : temps_prechauffage + 1;
+            TRUE : 0;
+        esac;
+
+    next(temps_attente) :=
+        case
+            etat = attente & temps_attente < 120 : temps_attente + 1;
+            TRUE : 0;
+        esac;
+
+    next(duree_job) :=
+        case
+            etat = traitement & duree_job > 0 : duree_job - 1;
+            job_recu & duree_job < 120 : duree_job + 1; -- new_duree_job est la durée du job reçu
+            TRUE : duree_job;
+        esac;
+
+    next(job_recu) := FALSE;
+
+-- -- Invariants et propriétés à vérifier
+LTLSPEC G (etat = traitement -> duree_job > 0); -- Toujours vrai que si l'état est traitement, la durée du job est positive
+CTLSPEC AG (etat = attente -> temps_attente <= 120); -- Toujours vrai que si l'état est attente, le compteur d'attente est <= 120
+CTLSPEC AG (etat = prechauffage -> temps_prechauffage <= 2); -- Toujours vrai que si l'état est préchauffage, le compteur de préchauffage est <= 2
