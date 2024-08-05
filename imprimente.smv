@@ -1,63 +1,78 @@
 MODULE main
 VAR
-    etat : {eteint, prechauffage, attente, traitement};
-    job_en_memoire : boolean; -- indique si un job est en mémoire
+    etat : {eteint, prechauffage, attente, traitement}; 
+    power: {on, off};
+    job: 0 .. 1000;
+    tache : 0 .. 10;
     temps_prechauffage : 0 .. 2; -- compteur pour le préchauffage
     temps_attente : 0 .. 120; -- compteur pour l'attente
-    duree_job : 0 .. 120; -- durée actuelle de traitement du job
-    job_recu : boolean; -- indique si un job a été reçu
+    temps_traiement : 0 .. 120; -- compteur pour le traitement
 
 ASSIGN
     init(etat) := eteint;
-    init(job_en_memoire) := FALSE;
+    init(power) := on;
+    init(job) := 0;
+    init(tache) := 0;
     init(temps_prechauffage) := 0;
     init(temps_attente) := 0;
-    init(duree_job) := 0;
-    init(job_recu) := FALSE;
+    init(temps_traiement) := 0;
 
     next(etat) :=
         case
-            etat = eteint & job_recu : prechauffage;
-            etat = prechauffage & temps_prechauffage < 2 : prechauffage;
-            etat = prechauffage & temps_prechauffage = 2 & job_en_memoire : traitement;
-            etat = prechauffage & temps_prechauffage = 2 & !job_en_memoire : attente;
-            etat = attente & temps_attente < 120 & !job_recu : attente;
-            etat = attente & temps_attente = 120 & !job_recu : eteint;
-            etat = attente & job_recu : traitement;
-            etat = traitement & duree_job > 0 : traitement;
-            etat = traitement & duree_job = 0 : attente;
+            etat = eteint & power = on : prechauffage;
+            etat = prechauffage & temps_prechauffage > 0 : prechauffage;
+            etat = prechauffage & temps_prechauffage = 0 & job > 0 : traitement;
+            etat = prechauffage & temps_prechauffage = 0 & job = 0 : attente;
+            etat = prechauffage & power = off : eteint;
+            etat = attente & temps_attente = 0 & job = 0 : attente;
+            etat = attente & temps_attente > 0 & job > 0 : traitement;
+            etat = traitement & temps_traiement > 0 : traitement;
+            etat = traitement & temps_traiement = 0 : attente;
             TRUE : etat;
         esac;
 
-    next(job_en_memoire) :=
+
+    next(job) :=
         case
-            etat = traitement & duree_job = 0 : FALSE;
-            job_recu : TRUE;
-            TRUE : job_en_memoire;
+            etat = prechauffage & tache >= 1 & job < 1000 - tache : job + tache;
+            etat = traitement & tache >= 1 & job < 1000 - tache : job + tache;
+            etat = attente & tache >= 1 & job < 1000 - tache: job + tache;
+            etat = traitement & job > 0: job - 1;
+            etat = eteint & power=off : 0;
+            TRUE : job;
+        esac;
+    
+    next(tache) :=
+        case
+            (etat = traitement & tache > 0) : 0;
+            etat = eteint & power = off: 0;
+            TRUE : tache;
         esac;
 
     next(temps_prechauffage) :=
         case
-            etat = prechauffage & temps_prechauffage < 2 : temps_prechauffage + 1;
-            TRUE : 0;
+            etat = prechauffage & temps_prechauffage > 2 : temps_prechauffage - 1;
+            TRUE : temps_prechauffage;
         esac;
 
     next(temps_attente) :=
         case
-            etat = attente & temps_attente < 120 : temps_attente + 1;
-            TRUE : 0;
+            etat = attente & temps_attente > 120 : temps_attente - 1;
+            TRUE : temps_attente;
         esac;
 
-    next(duree_job) :=
+    next(temps_traiement) :=
         case
-            etat = traitement & duree_job > 0 : duree_job - 1;
-            job_recu & duree_job < 120 : duree_job + 1; -- new_duree_job est la durée du job reçu
-            TRUE : duree_job;
+            etat = traitement & temps_traiement > 0 : temps_traiement - 1;
+            TRUE : temps_traiement;
         esac;
 
-    next(job_recu) := FALSE;
 
--- -- Invariants et propriétés à vérifier
-LTLSPEC G (etat = traitement -> duree_job > 0); -- Toujours vrai que si l'état est traitement, la durée du job est positive
-CTLSPEC AG (etat = attente -> temps_attente <= 120); -- Toujours vrai que si l'état est attente, le compteur d'attente est <= 120
-CTLSPEC AG (etat = prechauffage -> temps_prechauffage <= 2); -- Toujours vrai que si l'état est préchauffage, le compteur de préchauffage est <= 2
+
+LTLSPEC G (etat = traitement -> temps_traiement > 0);
+LTLSPEC G (etat = eteint & power = on -> etat = prechauffage);
+LTLSPEC G (etat = prechauffage & power = on -> etat = traitement);
+CTLSPEC AG (etat = attente -> temps_attente <= 120);
+CTLSPEC AG (etat = prechauffage -> temps_prechauffage <= 2);
+CTLSPEC AG (etat = eteint -> AF (etat = traitement & power = off));
+CTLSPEC AG (power = on -> AF (etat = eteint));

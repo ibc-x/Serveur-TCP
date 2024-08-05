@@ -1,0 +1,17 @@
+MODULE feu(autre)
+VAR 
+    etats : {red, yellow, green};
+
+ASSIGN
+    init(etats):=red;
+    next(etats):=case
+                etats=red & autre=red : {red, yellow};
+                etats=yellow : green;
+                etats=green  : {green, red};
+                TRUE: etats;
+                esac;
+MODULE main
+
+VAR
+    tl1:  feu(tl2.etats);
+    tl2: feu(tl1.etats);
